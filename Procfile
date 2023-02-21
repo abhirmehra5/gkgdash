@@ -1,0 +1,1 @@
+web: gunicorn type1_Abhir:server
