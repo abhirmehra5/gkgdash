@@ -1,1 +1,1 @@
-web: gunicorn type1_Abhir:server
+web: gunicorn gkgdash:server
