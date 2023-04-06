@@ -3,12 +3,16 @@ from dash import  dcc, Input, Output, html
 import dash
 import plotly.express as px
 import plotly.graph_objects as go
-import mpld3
-from wordcloud import WordCloud
-import matplotlib.pyplot as plt
 import dash_bootstrap_components as dbc
+import numpy as np
 
-newdata24 = pd.read_csv('24hr.csv')
+newdata24=pd.read_csv('gkgfinal_24.csv')
+
+newdata24['Organizations']=newdata24['Organizations'].str.replace('[','')
+newdata24['Organizations']=newdata24['Organizations'].str.replace(']','')
+newdata24['Organizations']=newdata24['Organizations'].str.replace("'",'')
+newdata24['Organizations']=newdata24['Organizations'].str.replace('"','')
+
 options24 = (list(newdata24['Organizations'].str.split(',', expand=True).stack()))
 options24 = [x.strip(' ') for x in options24]
 
@@ -17,16 +21,41 @@ orgs24 = []
 for i in options24:
     if (i not in orgs24):
         orgs24.append(i)
+#%%
+df_theme = pd.read_pickle('theme_sdg_mapping.pk')
+themes=list(df_theme.keys())
+actualthemes24=[]
 
+for i in range(len(newdata24['Themes'])):
+    rowthemes=newdata24['Themes'].str.split(';')[i]
+    neededthemes=[]
+    if type(rowthemes) is float:
+        pass
+    else:
+        for i in range(len(themes)):
+            theme=themes[i]
+            if theme in rowthemes:
+                neededthemes.append(theme)
+            else:
+                neededthemes.append(np.nan)
+
+    cleanedList24 = [x for x in neededthemes if str(x) != 'nan']
+    actualthemes24.append(cleanedList24)
+#%%
+newdata24['ActualThemes']=actualthemes24
+newdata24['ActualThemes'] = [','.join(map(str, l)) for l in newdata24['ActualThemes']]
+newdata24['ActualThemes'] = newdata24['ActualThemes'].replace(r'^\s*$', np.nan, regex=True)
+newdata24=newdata24[newdata24['ActualThemes'].notna()]
+#%%
 newdata24['dates'] = pd.to_datetime(newdata24['DATE'], format='%Y%m%d%H%M%S')
-data_15=newdata24[newdata24['dates'].isin(['2022-03-11 17:00:00'])]
-
+data_15=newdata24[newdata24['dates'].isin([newdata24['dates'][0]])]
+#%%
 # master=pd.read_csv('/Users/AbhirMehra/PycharmProjects/stockmetadata_Abhir/mastertable.csv')
 # master=master[['Ticker','Company_Name']]
 # master=master[master['Company_Name'].isin([i.upper() for i in options24])]
 # prices=pd.read_csv('prices.csv')
 # prices=prices.merge(master,left_on="Ticker",right_on="Ticker",how="right")
-
+#%%
 layout=dbc.Container([
     html.Div([
         dcc.Dropdown(id='dropdown',options = orgs24,placeholder="Select a Company")]),
@@ -54,18 +83,18 @@ layout=dbc.Container([
     html.Div([
         dcc.Graph(id='tableurl24', style={'display': 'inline-block'}),
         dcc.Graph(id='tableurl',style={'display': 'inline-block'})]),
-    html.Div([
-        dcc.Graph(id='pricegraph24', style={'display': 'inline-block'}),
-        dcc.Graph(id='pricegraph',style={'display': 'inline-block'})]),
+    # html.Div([
+    #     dcc.Graph(id='pricegraph24', style={'display': 'inline-block'}),
+    #     dcc.Graph(id='pricegraph',style={'display': 'inline-block'})]),
     html.Div([
         dcc.Graph(id='themegraph24', style={'display': 'inline-block'}),
         dcc.Graph(id='themegraph',style={'display': 'inline-block'})]),
     html.Div([
         dcc.Graph(id='stackedbar24', style={'display': 'inline-block'}),
-        dcc.Graph(id='stackedbar',style={'display': 'inline-block'})]),
-    html.Div([
-        html.Iframe(id='wordcloud24', srcDoc=None,style={'width':'45%','height':'500px','display': 'inline-block'}),
-        html.Iframe(id='wordcloud',srcDoc=None,style={'width':'45%','height':'500px','display': 'inline-block'})])])
+        dcc.Graph(id='stackedbar',style={'display': 'inline-block'})])])
+    # html.Div([
+    #     html.Iframe(id='wordcloud24', srcDoc=None,style={'width':'45%','height':'500px','display': 'inline-block'}),
+    #     html.Iframe(id='wordcloud',srcDoc=None,style={'width':'45%','height':'500px','display': 'inline-block'})]
 #%%
 app = dash.Dash(__name__)
 server = app.server
@@ -395,7 +424,9 @@ def update_stsfig(input_value):
 @app.callback(Output('stackedbar', 'figure'),
               [Input('dropdown', 'value')])
 def update_stackedbar(input_value):
-    org = newdata24[newdata24['dates'].isin(['2022-03-11 17:00:00', '2022-03-11 16:45:00'])]
+    curr=newdata24['dates'][0]
+    prev=curr-pd.Timedelta('0 days 00:15:00')
+    org = newdata24[newdata24['dates'].isin([curr, prev])]
     org = org[org['Organizations'].str.contains(input_value)]
     org = org[['ActualThemes', 'V2Tone', 'dates']]
     new = org['ActualThemes'].str.split(',', expand=True).stack()
@@ -405,10 +436,10 @@ def update_stackedbar(input_value):
     output['V2Tone'] = org['V2Tone']
     output['dates'] = org['dates']
     output['Themes'] = new.values
-    d1 = output[output['dates'].isin(['2022-03-11 17:00:00'])].groupby('Themes', as_index=False).mean()
-    d1['dates'] = '2022-03-11 17:00:00'
-    d2 = output[output['dates'].isin(['2022-03-11 16:45:00'])].groupby('Themes', as_index=False).mean()
-    d2['dates'] = '2022-03-11 16:45:00'
+    d1 = output[output['dates'].isin([curr])].groupby('Themes', as_index=False).mean()
+    d1['dates'] =  curr
+    d2 = output[output['dates'].isin([prev])].groupby('Themes', as_index=False).mean()
+    d2['dates'] = prev
     new = pd.concat([d1, d2])
     fig = px.bar(new, x="dates", y="V2Tone", color='Themes',
               hover_data=['Themes'], barmode='stack')
@@ -432,43 +463,43 @@ def update_stackedbar(input_value):
             hover_data=['Themes'], barmode = 'stack')
     return fig
 
-@app.callback(Output('wordcloud', 'srcDoc'),
-              [Input('dropdown', 'value')])
-def update_wordcloud(input_value):
-    org=data_15[data_15['Organizations'].str.contains(input_value)]
-    org=org[['ActualThemes','V2Tone']]
-    new=org['ActualThemes'].str.split(',',expand=True).stack()
-    text=""
-    for i in new.values:
-        text+=i + ' '
-    wordcloud = WordCloud(width = 800, height = 800,
-                background_color ='white',
-                min_font_size = 10).generate(text)
-    fig,ax=plt.subplots()
-    ax.imshow(wordcloud)
-    ax.axis("off")
-    wc = mpld3.fig_to_html(fig)
-    return wc
-
-@app.callback(Output('wordcloud24', 'srcDoc'),
-              [Input('dropdown', 'value')])
-def update_wordcloud(input_value):
-    org=newdata24[newdata24['Organizations'].str.contains(input_value)]
-    org=org[['ActualThemes','V2Tone']]
-    new=org['ActualThemes'].str.split(',',expand=True).stack()
-    text=""
-    for i in new.values:
-        text+=i + ' '
-    wordcloud = WordCloud(width = 800, height = 800,
-                background_color ='white',
-                min_font_size = 10).generate(text)
-    fig,ax=plt.subplots()
-    ax.imshow(wordcloud)
-    ax.axis("off")
-    wc = mpld3.fig_to_html(fig)
-    return wc
+# @app.callback(Output('wordcloud', 'srcDoc'),
+#               [Input('dropdown', 'value')])
+# def update_wordcloud(input_value):
+#     org=data_15[data_15['Organizations'].str.contains(input_value)]
+#     org=org[['ActualThemes','V2Tone']]
+#     new=org['ActualThemes'].str.split(',',expand=True).stack()
+#     text=""
+#     for i in new.values:
+#         text+=i + ' '
+#     wordcloud = WordCloud(width = 800, height = 800,
+#                 background_color ='white',
+#                 min_font_size = 10).generate(text)
+#     fig,ax=plt.subplots()
+#     ax.imshow(wordcloud)
+#     ax.axis("off")
+#     wc = mpld3.fig_to_html(fig)
+#     return wc
+#
+# @app.callback(Output('wordcloud24', 'srcDoc'),
+#               [Input('dropdown', 'value')])
+# def update_wordcloud(input_value):
+#     org=newdata24[newdata24['Organizations'].str.contains(input_value)]
+#     org=org[['ActualThemes','V2Tone']]
+#     new=org['ActualThemes'].str.split(',',expand=True).stack()
+#     text=""
+#     for i in new.values:
+#         text+=i + ' '
+#     wordcloud = WordCloud(width = 800, height = 800,
+#                 background_color ='white',
+#                 min_font_size = 10).generate(text)
+#     fig,ax=plt.subplots()
+#     ax.imshow(wordcloud)
+#     ax.axis("off")
+#     wc = mpld3.fig_to_html(fig)
+#     return wc
 
 
 
 if __name__ == '__main__':
-    app.run_server()
+    app.run_server(port='9009')
