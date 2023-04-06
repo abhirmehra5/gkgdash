@@ -502,4 +502,4 @@ def update_stackedbar(input_value):
 
 
 if __name__ == '__main__':
-    app.run_server(port='9009')
+    app.run_server()
