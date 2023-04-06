@@ -418,7 +418,8 @@ def update_stsfig(input_value):
     output['V2Tone'] = org['V2Tone']
     output['Date'] = org['dates']
     output['Themes'] = new.values
-    fig = px.line(output, x="Date", y="V2Tone", color='Themes')
+    output = output.sort_values('Date')
+    fig = px.line(output, x="Date", y="V2Tone", color='Themes',markers=True)
     return fig
 
 @app.callback(Output('stackedbar', 'figure'),
